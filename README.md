@@ -1,6 +1,8 @@
 # go-samp-query
 
-SA:MP Query API for Go
+Implements the
+[SA:MP query mechanism](https://wiki.sa-mp.com/wiki/Query_Mechanism) for getting
+data about a running server.
 
 See [GoDoc](https://godoc.org/github.com/Southclaws/go-samp-query) for full
 documentation

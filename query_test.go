@@ -2,13 +2,14 @@ package sampquery
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetServerLegacyInfo(t *testing.T) {
+func TestGetServerInfo(t *testing.T) {
 	type args struct {
 		host          string
 		attemptDecode bool
@@ -29,7 +30,7 @@ func TestGetServerLegacyInfo(t *testing.T) {
 			defer cancel()
 
 			server, err := GetServerInfo(ctx, tt.args.host, tt.args.attemptDecode)
-			if err != nil {
+			if tt.wantErr != "" {
 				assert.EqualError(t, err, tt.wantErr)
 			} else {
 				assert.NotEmpty(t, server.Address, "server.Address")
@@ -38,6 +39,25 @@ func TestGetServerLegacyInfo(t *testing.T) {
 				assert.NotZero(t, server.MaxPlayers, "server.MaxPlayers")
 			}
 			time.Sleep(time.Second) // allow goroutines to run so socket timeout doesn't fire
+		})
+	}
+}
+
+func TestQuery_GetPing(t *testing.T) {
+	tests := []struct {
+		addr string
+	}{
+		{"server.ls-rp.com:7777"},
+	}
+	for i, tt := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			query, err := NewQuery(tt.addr)
+			if err != nil {
+				t.Error(err)
+			}
+			gotPing, err := query.GetPing(context.Background())
+			assert.NotZero(t, gotPing)
+			fmt.Print(gotPing)
 		})
 	}
 }
