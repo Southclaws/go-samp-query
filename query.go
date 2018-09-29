@@ -45,14 +45,18 @@ type Query struct {
 }
 
 // GetServerInfo wraps a set of legacy queries and returns a new Server object with the available
-// fields populated.
+// fields populated. `attemptDecode` determines whether or not to attempt to decode ANSI into
+// Unicode from servers that use different codepages such as Cyrillic. This function can panic if
+// the socket it opens fails to close for whatever reason.
 func GetServerInfo(ctx context.Context, host string, attemptDecode bool) (server Server, err error) {
 	query, err := NewLegacyQuery(host)
 	if err != nil {
 		return
 	}
 	defer func() {
-		query.Close()
+		if err = query.Close(); err != nil {
+			panic(err)
+		}
 	}()
 
 	err = query.GetPing(ctx)
@@ -216,7 +220,6 @@ func (query *Query) GetInfo(ctx context.Context, attemptDecode bool) (server Ser
 	ptr += 4
 
 	languageRaw := response[ptr : ptr+languageLen]
-	ptr += languageLen
 
 	guessHelper := bytes.Join([][]byte{
 		hostnameRaw,
