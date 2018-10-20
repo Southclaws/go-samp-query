@@ -156,9 +156,11 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 		n, errInner := conn.Read(response)
 		if errInner != nil {
 			waitResult <- resultData{err: errors.Wrap(errInner, "failed to read response")}
+			return
 		}
 		if n > cap(response) {
 			waitResult <- resultData{err: errors.New("read response over buffer capacity")}
+			return
 		}
 		waitResult <- resultData{data: response, bytes: n}
 	}()
