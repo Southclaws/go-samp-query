@@ -149,7 +149,7 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 		bytes int
 		err   error
 	}
-	waitResult := make(chan resultData)
+	waitResult := make(chan resultData, 1)
 
 	go func() {
 		response := make([]byte, 2048)
