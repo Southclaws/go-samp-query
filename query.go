@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"net"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/saintfish/chardet"
@@ -22,6 +23,7 @@ type Server struct {
 	Language   string
 	Password   bool
 	Rules      map[string]string
+	Ping       int
 }
 
 // QueryType represents a query method from the SA:MP set: i, r, c, d, x, p
@@ -44,21 +46,26 @@ type Query struct {
 	Data Server
 }
 
-// GetServerInfo wraps a set of legacy queries and returns a new Server object with the available
-// fields populated.
+// GetServerInfo wraps a set of queries and returns a new Server object with the available fields
+// populated. `attemptDecode` determines whether or not to attempt to decode ANSI into Unicode from
+// servers that use different codepages such as Cyrillic. This function can panic if the socket it
+// opens fails to close for whatever reason.
 func GetServerInfo(ctx context.Context, host string, attemptDecode bool) (server Server, err error) {
-	query, err := NewLegacyQuery(host)
+	query, err := NewQuery(host)
 	if err != nil {
 		return
 	}
 	defer func() {
-		query.Close()
+		if err = query.Close(); err != nil {
+			panic(err)
+		}
 	}()
 
-	err = query.GetPing(ctx)
+	ping, err := query.GetPing(ctx)
 	if err != nil {
 		return
 	}
+	server.Ping = int(ping)
 
 	server, err = query.GetInfo(ctx, attemptDecode)
 	if err != nil {
@@ -74,8 +81,8 @@ func GetServerInfo(ctx context.Context, host string, attemptDecode bool) (server
 	return
 }
 
-// NewLegacyQuery creates a new legacy query handler for a server
-func NewLegacyQuery(host string) (query *Query, err error) {
+// NewQuery creates a new query handler for a server
+func NewQuery(host string) (query *Query, err error) {
 	query = new(Query)
 
 	query.addr, err = net.ResolveUDPAddr("udp", host)
@@ -86,7 +93,7 @@ func NewLegacyQuery(host string) (query *Query, err error) {
 	return query, nil
 }
 
-// Close closes a legacy query manager's connection
+// Close closes a query manager's connection
 func (query *Query) Close() error {
 	return nil
 }
@@ -142,16 +149,18 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 		bytes int
 		err   error
 	}
-	waitResult := make(chan resultData)
+	waitResult := make(chan resultData, 1)
 
 	go func() {
 		response := make([]byte, 2048)
 		n, errInner := conn.Read(response)
 		if errInner != nil {
 			waitResult <- resultData{err: errors.Wrap(errInner, "failed to read response")}
+			return
 		}
 		if n > cap(response) {
 			waitResult <- resultData{err: errors.New("read response over buffer capacity")}
+			return
 		}
 		waitResult <- resultData{data: response, bytes: n}
 	}()
@@ -173,11 +182,13 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 }
 
 // GetPing sends and receives a packet to measure ping
-func (query *Query) GetPing(ctx context.Context) (err error) {
+func (query *Query) GetPing(ctx context.Context) (ping time.Duration, err error) {
+	t := time.Now()
 	_, err = query.SendQuery(ctx, Ping)
 	if err != nil {
-		return err
+		return 0, err
 	}
+	ping = time.Now().Sub(t)
 
 	return
 }
@@ -216,7 +227,6 @@ func (query *Query) GetInfo(ctx context.Context, attemptDecode bool) (server Ser
 	ptr += 4
 
 	languageRaw := response[ptr : ptr+languageLen]
-	ptr += languageLen
 
 	guessHelper := bytes.Join([][]byte{
 		hostnameRaw,
@@ -240,7 +250,7 @@ func (query *Query) GetInfo(ctx context.Context, attemptDecode bool) (server Ser
 	return
 }
 
-// GetRules returns a map of rule properties from a server. The legacy query uses established keys
+// GetRules returns a map of rule properties from a server. The query uses established keys
 // such as "Map" and "Version"
 func (query *Query) GetRules(ctx context.Context) (rules map[string]string, err error) {
 	response, err := query.SendQuery(ctx, Rules)
