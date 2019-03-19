@@ -15,15 +15,15 @@ import (
 
 // Server contains all the information retreived from the server query API.
 type Server struct {
-	Address    string
-	Hostname   string
-	Players    int
-	MaxPlayers int
-	Gamemode   string
-	Language   string
-	Password   bool
-	Rules      map[string]string
-	Ping       int
+	Address    string            `json:"address"`
+	Hostname   string            `json:"hostname"`
+	Players    int               `json:"players"`
+	MaxPlayers int               `json:"max_players"`
+	Gamemode   string            `json:"gamemode"`
+	Language   string            `json:"language"`
+	Password   bool              `json:"password"`
+	Rules      map[string]string `json:"rules"`
+	Ping       int               `json:"ping"`
 }
 
 // QueryType represents a query method from the SA:MP set: i, r, c, d, x, p
