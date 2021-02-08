@@ -56,8 +56,8 @@ func GetServerInfo(ctx context.Context, host string, attemptDecode bool) (server
 		return
 	}
 	defer func() {
-		if err = query.Close(); err != nil {
-			panic(err)
+		if e := query.Close(); e != nil {
+			panic(e)
 		}
 	}()
 
