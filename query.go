@@ -61,12 +61,6 @@ func GetServerInfo(ctx context.Context, host string, attemptDecode bool) (server
 		}
 	}()
 
-	ping, err := query.GetPing(ctx)
-	if err != nil {
-		return
-	}
-	server.Ping = int(ping)
-
 	server, err = query.GetInfo(ctx, attemptDecode)
 	if err != nil {
 		return
@@ -77,6 +71,13 @@ func GetServerInfo(ctx context.Context, host string, attemptDecode bool) (server
 	if err != nil {
 		return
 	}
+
+	ping, err := query.GetPing(ctx)
+	if err != nil {
+		return
+	}
+	server.Ping = int(ping)
+
 
 	return
 }
