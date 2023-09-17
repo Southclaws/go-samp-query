@@ -160,6 +160,11 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 
 	go func() {
 		response := make([]byte, 2048)
+
+		if opcode == IsOmp {
+			conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		}
+
 		n, errInner := conn.Read(response)
 		if errInner != nil {
 			waitResult <- resultData{err: errors.Wrap(errInner, "failed to read response")}
