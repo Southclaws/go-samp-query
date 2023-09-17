@@ -24,6 +24,7 @@ type Server struct {
 	Password   bool              `json:"password"`
 	Rules      map[string]string `json:"rules"`
 	Ping       int               `json:"ping"`
+	IsOmp      bool              `json:"isOmp"`
 }
 
 // QueryType represents a query method from the SA:MP set: i, r, c, d, x, p
@@ -38,6 +39,8 @@ const (
 	Players QueryType = 'c'
 	// Ping is the 'p' packet type
 	Ping QueryType = 'p'
+	// IsOmp is the 'o' packet type
+	IsOmp QueryType = 'o'
 )
 
 // Query stores state for masterlist queries
@@ -78,6 +81,8 @@ func GetServerInfo(ctx context.Context, host string, attemptDecode bool) (server
 	}
 	server.Ping = int(ping)
 
+	isOmp := query.GetOmpValidity(ctx)
+	server.IsOmp = isOmp
 
 	return
 }
@@ -123,7 +128,8 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 	if err = binary.Write(request, binary.LittleEndian, opcode); err != nil {
 		return
 	}
-	if opcode == Ping {
+
+	if opcode == Ping || opcode == IsOmp {
 		p := make([]byte, 4)
 		_, err = rand.Read(p)
 		if err != nil {
@@ -169,7 +175,12 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 	var result resultData
 	select {
 	case <-ctx.Done():
-		return nil, errors.New("socket read timed out")
+		{
+			if opcode == IsOmp {
+				return nil, nil
+			}
+			return nil, errors.New("socket read timed out")
+		}
 
 	case result = <-waitResult:
 		break
@@ -192,6 +203,16 @@ func (query *Query) GetPing(ctx context.Context) (ping time.Duration, err error)
 	ping = time.Now().Sub(t)
 
 	return
+}
+
+// GetOmpValidity sends and receives a packet to check if server is using open.mp or not
+func (query *Query) GetOmpValidity(ctx context.Context) bool {
+	var res, _ = query.SendQuery(ctx, IsOmp)
+	if res == nil {
+		return false
+	}
+
+	return true
 }
 
 // GetInfo returns the core server info for displaying on the browser list.
