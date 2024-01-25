@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -81,9 +82,26 @@ func GetServerInfo(ctx context.Context, host string, attemptDecode bool) (server
 	}
 	server.Ping = int(ping)
 
-	isOmp := query.GetOmpValidity(ctx)
-	server.IsOmp = isOmp
+	var isOmp bool
+	requiresAdditionalOmpCheck := false
+	ver, found := server.Rules["version"]
+	_, found2 := server.Rules["allow_DL"]
 
+	if found {
+		requiresAdditionalOmpCheck = strings.Contains(ver, "omp ")
+	} else {
+		if found2 {
+			requiresAdditionalOmpCheck = true
+		}
+	}
+
+	if !requiresAdditionalOmpCheck {
+		isOmp = query.GetOmpValidity(ctx)
+	} else {
+		isOmp = true
+	}
+
+	server.IsOmp = isOmp
 	return
 }
 
