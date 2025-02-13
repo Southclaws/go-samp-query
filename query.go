@@ -192,6 +192,10 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 			waitResult <- resultData{err: errors.New("read response over buffer capacity")}
 			return
 		}
+		if len(response) < 11 {
+			waitResult <- resultData{err: errors.New("read response over buffer capacity")}
+			return
+		}
 		waitResult <- resultData{data: response, bytes: n}
 	}()
 
@@ -299,34 +303,57 @@ func (query *Query) GetInfo(ctx context.Context, attemptDecode bool) (server Ser
 // such as "Map" and "Version"
 func (query *Query) GetRules(ctx context.Context) (rules map[string]string, err error) {
 	response, err := query.SendQuery(ctx, Rules)
+	responseLen := len(response)
 	if err != nil {
 		return rules, err
 	}
 
 	rules = make(map[string]string)
 
+	if responseLen < 20 {
+		return rules, nil
+	}
+
 	var (
-		key string
-		val string
-		len int
+		key    string
+		val    string
+		keyLen int
+		valLen int
 	)
 
+	// fmt.Println("starting GetRules for", query.addr)
 	ptr := 11
 	amount := binary.LittleEndian.Uint16(response[ptr : ptr+2])
 	ptr += 2
 
-	for i := uint16(0); i < amount; i++ {
-		len = int(response[ptr])
+	for i := uint16(0); i < amount && ptr < responseLen; i++ {
+		if ptr >= responseLen {
+			break
+		}
+
+		keyLen = int(response[ptr])
 		ptr++
 
-		key = string(response[ptr : ptr+len])
-		ptr += len
+		if ptr+keyLen > responseLen {
+			break
+		}
 
-		len = int(response[ptr])
+		key = string(response[ptr : ptr+keyLen])
+		ptr += keyLen
+
+		if ptr >= responseLen {
+			break
+		}
+
+		valLen = int(response[ptr])
 		ptr++
 
-		val = string(response[ptr : ptr+len])
-		ptr += len
+		if ptr+valLen > responseLen {
+			break
+		}
+
+		val = string(response[ptr : ptr+valLen])
+		ptr += valLen
 
 		rules[key] = val
 	}
