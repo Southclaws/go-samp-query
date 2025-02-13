@@ -192,10 +192,6 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 			waitResult <- resultData{err: errors.New("read response over buffer capacity")}
 			return
 		}
-		if len(response) < 11 {
-			waitResult <- resultData{err: errors.New("read response over buffer capacity")}
-			return
-		}
 		waitResult <- resultData{data: response, bytes: n}
 	}()
 
@@ -215,6 +211,10 @@ func (query *Query) SendQuery(ctx context.Context, opcode QueryType) (response [
 
 	if result.err != nil {
 		return nil, result.err
+	}
+
+	if result.bytes < 11 {
+		return nil, errors.New("response is less than 11 bytes")
 	}
 
 	return result.data[:result.bytes], nil
