@@ -9,10 +9,11 @@ import (
 	"net"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/pkg/errors"
-	"github.com/saintfish/chardet"
-	"golang.org/x/text/encoding/htmlindex"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/transform"
 )
 
 // Validation constants for open.mp/SA:MP server data limits
@@ -62,6 +63,10 @@ type Query struct {
 	addr *net.UDPAddr
 	Data Server
 }
+
+var (
+	windows1251 = charmap.Windows1251.NewDecoder()
+)
 
 // GetServerInfo wraps a set of queries and returns a new Server object with the available fields
 // populated. `attemptDecode` determines whether or not to attempt to decode ANSI into Unicode from
@@ -240,7 +245,7 @@ func (query *Query) GetPing(ctx context.Context) (ping time.Duration, err error)
 	if err != nil {
 		return 0, err
 	}
-	ping = time.Now().Sub(t)
+	ping = time.Since(t)
 
 	return
 }
@@ -302,22 +307,16 @@ func (query *Query) GetInfo(ctx context.Context, attemptDecode bool) (server Ser
 
 	languageRaw := response[ptr : ptr+languageLen]
 
-	guessHelper := bytes.Join([][]byte{
-		hostnameRaw,
-		gamemodeRaw,
-		languageRaw,
-	}, []byte(" "))
-
 	if attemptDecode {
-		server.Gamemode = attemptDecodeANSI(gamemodeRaw, guessHelper)
-		server.Hostname = attemptDecodeANSI(hostnameRaw, guessHelper)
+		server.Gamemode = AttemptDecodeANSI(gamemodeRaw)
+		server.Hostname = AttemptDecodeANSI(hostnameRaw)
 	} else {
 		server.Gamemode = string(gamemodeRaw)
 		server.Hostname = string(hostnameRaw)
 	}
 
 	if languageLen > 0 && attemptDecode {
-		server.Language = attemptDecodeANSI(languageRaw, guessHelper)
+		server.Language = AttemptDecodeANSI(languageRaw)
 	} else {
 		server.Language = "-"
 	}
@@ -428,20 +427,17 @@ func openConnection(addr *net.UDPAddr) (conn *net.UDPConn, err error) {
 	return
 }
 
-func attemptDecodeANSI(input []byte, extra []byte) (result string) {
-	result = string(input)
-	detector, err := chardet.NewTextDetector().DetectBest(extra)
-	if err != nil {
-		return
+// Tries if input is utf-8, if not it attemps to transform the bytes into Windows-1251
+// Useful in decoding "mapname" from rules
+func AttemptDecodeANSI(input []byte) string {
+	if utf8.Valid(input) {
+		return string(input)
 	}
-	e, err := htmlindex.Get(detector.Charset)
+
+	decoded, _, err := transform.Bytes(windows1251, input)
 	if err != nil {
-		return
+		return string(input)
 	}
-	dec := e.NewDecoder()
-	decoded, err := dec.Bytes(input)
-	if err != nil {
-		return
-	}
+
 	return string(decoded)
 }
